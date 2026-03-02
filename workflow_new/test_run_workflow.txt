@@ -1,0 +1,54 @@
+[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J======================================================================
+ BC Workflow Agent - Step: 0 | Cumulative Reward: 0.00
+======================================================================
+
+[Swimlane 1: Invoice Extraction]
+  ⏳ [task_1] Read Invoice PDF (Independent)
+  ⏳ [task_2] Extract Invoice Data (Deps: ['task_1'])
+  ⏳ [task_3] Validate Data (Deps: ['task_2'])
+
+[Swimlane 2: Human Review]
+  ⏳ [task_4] Final Approval (Deps: ['task_3'])
+
+ [+] Executed Read Invoice PDF
+======================================================================
+ BC Workflow Agent - Step: 1 | Cumulative Reward: 10.00
+======================================================================
+
+[Swimlane 1: Invoice Extraction]
+  ✅ [task_1] Read Invoice PDF (Independent)
+  ⏳ [task_2] Extract Invoice Data (Deps: ['task_1'])
+  ⏳ [task_3] Validate Data (Deps: ['task_2'])
+
+[Swimlane 2: Human Review]
+  ⏳ [task_4] Final Approval (Deps: ['task_3'])
+
+ [+] Executed Extract Invoice Data
+======================================================================
+ BC Workflow Agent - Step: 2 | Cumulative Reward: 20.00
+======================================================================
+
+[Swimlane 1: Invoice Extraction]
+  ✅ [task_1] Read Invoice PDF (Independent)
+  ✅ [task_2] Extract Invoice Data (Deps: ['task_1'])
+  ⏳ [task_3] Validate Data (Deps: ['task_2'])
+
+[Swimlane 2: Human Review]
+  ⏳ [task_4] Final Approval (Deps: ['task_3'])
+
+ [+] Executed Validate Data
+======================================================================
+ BC Workflow Agent - Step: 3 | Cumulative Reward: 30.00
+======================================================================
+
+[Swimlane 1: Invoice Extraction]
+  ✅ [task_1] Read Invoice PDF (Independent)
+  ✅ [task_2] Extract Invoice Data (Deps: ['task_1'])
+  ✅ [task_3] Validate Data (Deps: ['task_2'])
+
+[Swimlane 2: Human Review]
+  ⏳ [task_4] Final Approval (Deps: ['task_3'])
+
+ [+] Executed Final Approval
+
+Workflow Run Finished! Total Steps: 4, Final Score: 140.00

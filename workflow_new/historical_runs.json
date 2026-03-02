@@ -1,0 +1,18 @@
+[
+  {
+    "id": "run-001",
+    "status": "completed",
+    "task_executions": [
+      {
+        "task_id": "task_1",
+        "status": "completed",
+        "started_at": "2026-03-02T10:01:00Z"
+      },
+      {
+        "task_id": "task_2",
+        "status": "completed",
+        "started_at": "2026-03-02T10:02:30Z"
+      }
+    ]
+  }
+]

@@ -1,0 +1,29 @@
+
+{
+  "board_metadata": {
+    "board_id": "dev_sprint_01",
+    "wip_limits": {
+      "todo": 99,
+      "in_progress": 3,
+      "review": 2,
+      "done": 99
+    }
+  },
+  "columns": {
+    "todo": [
+      {"id": "task_101", "priority": 1, "complexity": 3, "age_in_days": 0},
+      {"id": "task_102", "priority": 2, "complexity": 5, "age_in_days": 1}
+    ],
+    "in_progress": [
+      {"id": "task_100", "priority": 3, "complexity": 8, "age_in_days": 4}
+    ],
+    "review": [],
+    "done": [
+      {"id": "task_99", "priority": 1, "complexity": 2, "age_in_days": 10}
+    ]
+  },
+  "agent_stats": {
+    "throughput": 15,
+    "current_cycle_time_avg": 4.2
+  }
+}

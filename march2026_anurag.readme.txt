@@ -1,0 +1,1214 @@
+# Kanban Board System - Complete API Guide & Workflow
+
+## Table of Contents
+1. [API Endpoints Overview](#api-endpoints-overview)
+2. [Data Flow & Execution Model](#data-flow--execution-model)
+3. [Form ADV Auditor - Complete Example](#form-adv-auditor---complete-example)
+4. [Customize View Explained](#customize-view-explained)
+5. [Building a Board Step-by-Step](#building-a-board-step-by-step)
+
+---
+
+## API Endpoints Overview
+
+### Base URL
+```
+/api/kanban
+```
+
+### Authentication
+All endpoints require Bearer token:
+```
+Authorization: Bearer <access_token>
+```
+
+---
+
+## 1. BOARD Management APIs
+
+### **Create Board**
+```http
+POST /api/kanban/boards
+```
+**Request Body:**
+```json
+{
+  "name": "Board Name",
+  "input_schema": {
+    "type": "object",
+    "required": ["field1"],
+    "properties": {
+      "field1": {
+        "type": "string",
+        "format": "file",
+        "description": "Field description",
+        "displayName": "Display Name"
+      }
+    }
+  },
+  "description": "Board description",
+  "instructions": "Global board instructions",
+  "output_schema": {},
+  "state_schema": {},
+  "default_model": "claude-sonnet",
+  "reference_id": "unique-id"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "board-uuid",
+    "name": "Board Name",
+    "status": "draft",
+    "version": 1,
+    ...
+  }
+}
+```
+
+---
+
+### **List Boards**
+```http
+GET /api/kanban/boards
+```
+Returns all boards for the current user.
+
+---
+
+### **Get Board (with full details)**
+```http
+GET /api/kanban/boards/{board_id}
+```
+Returns complete board including all swimlanes, tasks, and dependencies.
+
+---
+
+### **Update Board**
+```http
+PUT /api/kanban/boards/{board_id}
+```
+Only works for **draft** boards.
+**Request Body:**
+```json
+{
+  "name": "Updated Name",
+  "description": "Updated description",
+  "instructions": "Updated instructions",
+  "input_schema": {},
+  "output_schema": {},
+  "state_schema": {},
+  "default_model": "claude-sonnet"
+}
+```
+
+---
+
+### **Delete Board**
+```http
+DELETE /api/kanban/boards/{board_id}
+```
+Deletes board and all children (swimlanes, tasks, dependencies).
+
+---
+
+### **Validate Board**
+```http
+POST /api/kanban/boards/{board_id}/validate
+```
+Validates board before publishing without changing status.
+
+---
+
+### **Publish Board**
+```http
+POST /api/kanban/boards/{board_id}/publish
+```
+Validates and publishes a draft board. Only published boards can be executed.
+
+---
+
+### **Unpublish Board**
+```http
+POST /api/kanban/boards/{board_id}/unpublish
+```
+Reverts published board to draft for editing.
+
+---
+
+## 2. SWIMLANE Management APIs
+
+### **Create Swimlane**
+```http
+POST /api/kanban/boards/{board_id}/swimlanes
+```
+**Request Body:**
+```json
+{
+  "name": "Swimlane Name",
+  "instructions": "Phase-specific instructions",
+  "position": 0,
+  "exit_criteria": {
+    "type": "all_tasks_success",
+    "expression": null,
+    "on_failure": "stop"
+  }
+}
+```
+
+---
+
+### **Update Swimlane**
+```http
+PUT /api/kanban/swimlanes/{swimlane_id}
+```
+**Request Body:**
+```json
+{
+  "name": "Updated Name",
+  "instructions": "Updated instructions",
+  "position": 1,
+  "exit_criteria": {
+    "type": "all_tasks_success"
+  }
+}
+```
+
+---
+
+### **Delete Swimlane**
+```http
+DELETE /api/kanban/swimlanes/{swimlane_id}
+```
+Deletes swimlane and all tasks within it.
+
+---
+
+### **Reorder Swimlanes**
+```http
+PUT /api/kanban/boards/{board_id}/swimlanes/reorder
+```
+**Request Body:**
+```json
+{
+  "swimlane_ids": ["swimlane-uuid-1", "swimlane-uuid-2", "swimlane-uuid-3"]
+}
+```
+
+---
+
+## 3. TASK Management APIs
+
+### **Create Task**
+```http
+POST /api/kanban/swimlanes/{swimlane_id}/tasks
+```
+**Request Body:**
+```json
+{
+  "name": "Task Name",
+  "instructions": "Detailed task instructions/prompt",
+  "task_type": "llm_call",
+  "position": 0,
+  "input_mapping": {
+    "field": "$.run_input.source"
+  },
+  "output_mapping": {
+    "result": "$.state.target"
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["field1"],
+    "properties": {
+      "field1": { "type": "string" }
+    }
+  },
+  "tool_config": {
+    "tool_name": "tool_name",
+    "params": {}
+  },
+  "model_override": "claude-opus"
+}
+```
+
+**Valid task_type values:**
+- `llm_call` - LLM inference
+- `tool_call` - External tool execution
+- `human_review` - Pause for human input
+- `conditional` - Routing logic
+
+---
+
+### **Update Task**
+```http
+PUT /api/kanban/tasks/{task_id}
+```
+Same fields as create.
+
+---
+
+### **Delete Task**
+```http
+DELETE /api/kanban/tasks/{task_id}
+```
+Deletes task and all its dependencies.
+
+---
+
+## 4. TASK DEPENDENCY APIs
+
+### **Add Dependency**
+```http
+POST /api/kanban/tasks/{task_id}/dependencies
+```
+**Request Body:**
+```json
+{
+  "target_task_id": "prerequisite-task-uuid"
+}
+```
+This means: `task_id` depends on `target_task_id` completing first.
+
+---
+
+### **Remove Dependency**
+```http
+DELETE /api/kanban/tasks/{task_id}/dependencies/{target_task_id}
+```
+
+---
+
+## 5. RUN Execution APIs
+
+### **Create and Start Run**
+```http
+POST /api/kanban/boards/{board_id}/run
+```
+**Request Body (immediate start):**
+```json
+{
+  "run_input": {
+    "field1": "value1",
+    "crd_number": "119290"
+  },
+  "defer_start": false,
+  "test_data_set": "optional-test-set-name"
+}
+```
+
+**Request Body (deferred start for file uploads):**
+```json
+{
+  "run_input": {
+    "field1": "value1"
+  },
+  "defer_start": true
+}
+```
+Returns `run_id` in pending status. Upload files first, then call start.
+
+---
+
+### **Upload Files to Run**
+```http
+POST /api/kanban/runs/{run_id}/files
+```
+**Content-Type:** `multipart/form-data`
+```
+file: <file_data>
+file_key: <field_name_from_input_schema>
+```
+
+---
+
+### **Start Pending Run**
+```http
+POST /api/kanban/runs/{run_id}/start
+```
+Starts a run that was created with `defer_start: true`.
+
+---
+
+### **Get Run Status**
+```http
+GET /api/kanban/runs/{run_id}/status
+```
+Returns lightweight status information.
+
+---
+
+### **Get Run Details**
+```http
+GET /api/kanban/runs/{run_id}
+```
+Returns complete run with all task executions, inputs, and outputs.
+
+---
+
+### **List Board Runs**
+```http
+GET /api/kanban/boards/{board_id}/runs?limit=50&offset=0&status=completed
+```
+
+---
+
+### **List All Runs**
+```http
+GET /api/kanban/runs?limit=50&offset=0&status=running
+```
+
+---
+
+### **Cancel Run**
+```http
+POST /api/kanban/runs/{run_id}/cancel
+```
+
+---
+
+### **Resume Run**
+```http
+POST /api/kanban/runs/{run_id}/resume
+```
+For paused runs (e.g., human_review tasks).
+
+---
+
+## Data Flow & Execution Model
+
+### **Architecture Overview**
+
+```
+User → API → Board Definition (DB) → Graph Compiler → LangGraph → Execution → Results
+```
+
+### **Execution Flow**
+
+1. **Board Structure (Static)**
+   - Board contains Swimlanes (sequential phases)
+   - Swimlanes contain Tasks
+   - Tasks have Dependencies (determines parallel/sequential execution)
+
+2. **Run Creation**
+   - User provides `run_input` matching `input_schema`
+   - System creates `BoardRun` record with status `pending`
+   - Board snapshot saved for historical reference
+
+3. **Graph Compilation**
+   - Board structure compiled to LangGraph state machine
+   - Tasks → Nodes
+   - Dependencies → Edges
+   - Swimlanes → Sequential stages
+
+4. **Task Execution Order**
+   ```
+   Swimlane 1 (All tasks complete) → Swimlane 2 (All tasks complete) → Swimlane 3...
+
+   Within each swimlane:
+   - Tasks with no dependencies: Start immediately (parallel)
+   - Tasks with dependencies: Wait for prerequisites
+   ```
+
+5. **Data Flow (JSONPath-based)**
+   ```
+   $.run_input.*          → Initial input
+   $.files.*              → Uploaded files
+   $.state.*              → Shared state across tasks
+   $.task_outputs.{uuid}.* → Output from specific task
+   ```
+
+6. **Task Execution Lifecycle**
+   ```
+   pending → running → completed/failed
+   ```
+
+7. **Run Completion**
+   - All swimlanes complete → status: `completed`
+   - Any task fails → status: `failed`
+   - User cancels → status: `cancelled`
+
+---
+
+## Form ADV Auditor - Complete Example
+
+### **Board Overview**
+**Purpose:** Compare Form ADV Part 1 (regulatory data) with Part 2 (client brochure) to identify discrepancies.
+
+**Input:** CRD number
+**Output:** Markdown compliance report
+
+### **Workflow Structure**
+
+```
+5 Swimlanes → 11 Tasks Total → 2 Tool Calls + 9 LLM Calls
+```
+
+---
+
+### **CUSTOMIZE VIEW - GENERAL Tab**
+
+#### **Board Configuration**
+
+```json
+{
+  "name": "Form ADV Auditor",
+  "reference_id": "form_adv_auditor",
+  "description": "Ensure consistency between Form ADV Part 1 and Part 2. It compares services, fees, and client types to identify discrepancies across your regulatory filings and brochures.",
+  "instructions": "You are a regulatory compliance analyst specializing in Form ADV verification. Your job is to compare the structured data in ADV Part 1 against the narrative disclosures in ADV Part 2 brochures to ensure consistency. Flag any discrepancies between what the firm reports to regulators vs what they disclose to clients.",
+  "default_model": "claude-sonnet",
+  "status": "published"
+}
+```
+
+**Key Fields:**
+- **name**: Board display name
+- **reference_id**: Human-readable identifier for templates
+- **description**: What the board does (user-facing)
+- **instructions**: System prompt / global context for all LLM tasks
+- **default_model**: Model used unless task has `model_override`
+
+---
+
+### **CUSTOMIZE VIEW - INPUT SCHEMA Tab**
+
+#### **What is Input Schema?**
+Defines the data structure users must provide when running the board.
+
+```json
+{
+  "type": "object",
+  "required": ["crd_number"],
+  "properties": {
+    "crd_number": {
+      "type": "string",
+      "description": "The investment adviser's CRD (Central Registration Depository) number",
+      "displayName": "CRD Number"
+    }
+  }
+}
+```
+
+**Field Types:**
+- `string` - Text input
+- `number` - Numeric input
+- `boolean` - True/false
+- `array` - List of items
+- `object` - Nested structure
+- `format: "file"` - File upload field
+
+**When user runs this board, they provide:**
+```json
+{
+  "run_input": {
+    "crd_number": "119290"
+  }
+}
+```
+
+**Access in tasks via:** `$.run_input.crd_number`
+
+---
+
+### **CUSTOMIZE VIEW - OUTPUT SCHEMA Tab**
+
+#### **What is Output Schema?**
+Defines the expected structure of the board's final output. (Optional)
+
+For Form ADV Auditor:
+```json
+null
+```
+This board produces a markdown report stored in state, not structured output.
+
+**Example with Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "overall_status": {
+      "type": "string",
+      "enum": ["CONSISTENT", "NEEDS_REVIEW", "DISCREPANCIES_FOUND"]
+    },
+    "report_markdown": { "type": "string" }
+  }
+}
+```
+
+---
+
+### **CUSTOMIZE VIEW - STATE SCHEMA Tab**
+
+#### **What is State Schema?**
+Defines intermediate data structure shared across all tasks. (Optional)
+
+For Form ADV Auditor:
+```json
+null
+```
+State is dynamically populated via `output_mapping` from each task.
+
+**Example State After Execution:**
+```json
+{
+  "state": {
+    "firm_name": "Example Investment Advisors",
+    "sec_number": "801-12345",
+    "adv1_data": { ... },
+    "adv1_success": true,
+    "brochure_full_text": "...",
+    "adv2_success": true,
+    "item4_content": "...",
+    "item5_content": "...",
+    "item7_content": "...",
+    "part1_extracted": { ... },
+    "part2_services": { ... },
+    "part2_fees": { ... },
+    "services_comparison": { ... },
+    "fees_comparison": { ... },
+    "final_report": "# ADV Cross-Document Verification Report..."
+  }
+}
+```
+
+**Access in tasks via:** `$.state.firm_name`, `$.state.adv1_data`, etc.
+
+---
+
+## SWIMLANE 1: Data Retrieval
+
+**Purpose:** Fetch raw data from SEC API
+
+**Exit Criteria:** All tasks must succeed
+
+### Tasks:
+
+#### **Task 1.1: Fetch ADV Part 1** (Tool Call)
+```json
+{
+  "name": "Fetch ADV Part 1",
+  "task_type": "tool_call",
+  "instructions": "Fetch Form ADV Part 1 regulatory data for the investment adviser.",
+  "tool_config": {
+    "tool_name": "fetch_adv_part1",
+    "params": {}
+  },
+  "input_mapping": {
+    "crd_number": "$.run_input.crd_number"
+  },
+  "output_mapping": {
+    "data": "$.state.adv1_data",
+    "error": "$.state.adv1_error",
+    "success": "$.state.adv1_success",
+    "firm_name": "$.state.firm_name",
+    "sec_number": "$.state.sec_number"
+  },
+  "dependencies": []
+}
+```
+
+**Flow:**
+1. Takes `crd_number` from `run_input`
+2. Calls `fetch_adv_part1` tool
+3. Stores result in state:
+   - `adv1_data` - Full regulatory data
+   - `adv1_success` - Boolean flag
+   - `firm_name`, `sec_number` - Extracted metadata
+
+**No dependencies** → Runs immediately (parallel with Task 1.2)
+
+---
+
+#### **Task 1.2: Fetch ADV Part 2** (Tool Call)
+```json
+{
+  "name": "Fetch ADV Part 2",
+  "task_type": "tool_call",
+  "instructions": "Fetch Form ADV Part 2A firm brochure and extract full text content.",
+  "tool_config": {
+    "tool_name": "fetch_adv_part2",
+    "params": {
+      "brochure_type": "firm_brochure"
+    }
+  },
+  "input_mapping": {
+    "crd_number": "$.run_input.crd_number"
+  },
+  "output_mapping": {
+    "error": "$.state.adv2_error",
+    "success": "$.state.adv2_success",
+    "full_text": "$.state.brochure_full_text",
+    "text_length": "$.state.brochure_text_length",
+    "brochure_date": "$.state.brochure_date",
+    "brochure_name": "$.state.brochure_name",
+    "brochure_type": "$.state.brochure_type",
+    "available_brochures": "$.state.available_brochures"
+  },
+  "dependencies": []
+}
+```
+
+**Runs in parallel with Task 1.1** (both have no dependencies)
+
+---
+
+## SWIMLANE 2: Extract Brochure Sections
+
+**Purpose:** Parse specific sections from the brochure text
+
+**Exit Criteria:** All tasks must succeed
+
+### Tasks:
+
+All 3 tasks run **in parallel** (no dependencies):
+
+#### **Task 2.1: Extract Item 4 - Advisory Business** (Tool Call)
+```json
+{
+  "tool_config": {
+    "tool_name": "extract_section_from_text",
+    "params": {
+      "item_number": 4
+    }
+  },
+  "input_mapping": {
+    "full_text": "$.state.brochure_full_text"
+  },
+  "output_mapping": {
+    "content": "$.state.item4_content",
+    "success": "$.state.item4_success"
+  }
+}
+```
+
+#### **Task 2.2: Extract Item 5 - Fees** (Tool Call)
+Item number: 5 → `item5_content`
+
+#### **Task 2.3: Extract Item 7 - Client Types** (Tool Call)
+Item number: 7 → `item7_content`
+
+---
+
+## SWIMLANE 3: Extract Comparable Data
+
+**Purpose:** Use LLM to extract structured data from both parts
+
+All 3 tasks run **in parallel**:
+
+---
+
+#### **Task 3.1: Extract Part 1 Services & Fees** (LLM Call)
+```json
+{
+  "name": "Extract Part 1 Services & Fees",
+  "task_type": "llm_call",
+  "instructions": "Extract services offered and fee/compensation information from ADV Part 1...",
+  "input_mapping": {
+    "adv1_data": "$.state.adv1_data",
+    "firm_name": "$.state.firm_name"
+  },
+  "output_mapping": {
+    "parsed": "$.state.part1_extracted"
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["firm_name", "services_list", "compensation_list"],
+    "properties": {
+      "firm_name": { "type": "string" },
+      "crd_number": { "type": "string" },
+      "services_list": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of services offered (Y responses from Item 5G)"
+      },
+      "compensation_list": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "total_aum": { "type": "number" },
+      "client_types_served": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  }
+}
+```
+
+**How it works:**
+1. LLM receives structured ADV Part 1 XML/JSON data
+2. Extracts services, fees, AUM, client types
+3. Returns JSON matching `output_schema`
+4. Stored in `$.state.part1_extracted`
+
+---
+
+#### **Task 3.2: Extract Part 2 Services** (LLM Call)
+```json
+{
+  "input_mapping": {
+    "firm_name": "$.state.firm_name",
+    "item4_content": "$.state.item4_content",
+    "item7_content": "$.state.item7_content"
+  },
+  "output_mapping": {
+    "parsed": "$.state.part2_services"
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "services_described": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "client_types_described": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  }
+}
+```
+
+---
+
+#### **Task 3.3: Extract Part 2 Fees** (LLM Call)
+```json
+{
+  "input_mapping": {
+    "item5_content": "$.state.item5_content"
+  },
+  "output_mapping": {
+    "parsed": "$.state.part2_fees"
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "fee_types_list": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "has_performance_fees": { "type": "boolean" }
+    }
+  }
+}
+```
+
+---
+
+## SWIMLANE 4: Consistency Checks
+
+**Purpose:** Compare extracted data to identify discrepancies
+
+### Tasks:
+
+#### **Task 4.1: Compare Services** (LLM Call)
+```json
+{
+  "input_mapping": {
+    "part1_extracted": "$.state.part1_extracted",
+    "part2_services": "$.state.part2_services"
+  },
+  "output_mapping": {
+    "parsed": "$.state.services_comparison"
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "services_status": {
+        "type": "string",
+        "enum": ["CONSISTENT", "MINOR_DISCREPANCY", "DISCREPANCY"]
+      },
+      "matching_services": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "part1_only_services": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "part2_only_services": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  }
+}
+```
+
+**LLM Logic:**
+- Compare Part 1 services list vs Part 2 services list
+- Identify matching services
+- Flag services only in Part 1 (not disclosed to clients)
+- Flag services only in Part 2 (not reported to regulators)
+- Return status: CONSISTENT / MINOR_DISCREPANCY / DISCREPANCY
+
+---
+
+#### **Task 4.2: Compare Fee Structures** (LLM Call)
+```json
+{
+  "input_mapping": {
+    "part1_extracted": "$.state.part1_extracted",
+    "part2_fees": "$.state.part2_fees"
+  },
+  "output_mapping": {
+    "parsed": "$.state.fees_comparison"
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "fees_status": {
+        "type": "string",
+        "enum": ["CONSISTENT", "MINOR_DISCREPANCY", "DISCREPANCY"]
+      },
+      "matching_fee_types": { "type": "array" },
+      "part1_only_fees": { "type": "array" },
+      "part2_only_fees": { "type": "array" }
+    }
+  }
+}
+```
+
+---
+
+## SWIMLANE 5: Verification Report
+
+**Purpose:** Generate final markdown report
+
+### Task:
+
+#### **Task 5.1: Generate Report** (LLM Call)
+```json
+{
+  "input_mapping": {
+    "firm_name": "$.state.firm_name",
+    "crd_number": "$.run_input.crd_number",
+    "part1_extracted": "$.state.part1_extracted",
+    "part2_services": "$.state.part2_services",
+    "part2_fees": "$.state.part2_fees",
+    "services_comparison": "$.state.services_comparison",
+    "fees_comparison": "$.state.fees_comparison",
+    "adv1_success": "$.state.adv1_success",
+    "adv2_success": "$.state.adv2_success",
+    "brochure_date": "$.state.brochure_date"
+  },
+  "output_mapping": {
+    "raw_response": "$.state.final_report"
+  },
+  "output_schema": {
+    "type": "string",
+    "description": "Markdown formatted ADV Cross-Document Verification Report"
+  }
+}
+```
+
+**LLM generates:**
+```markdown
+# ADV Cross-Document Verification Report
+
+## Executive Summary
+| Category | Status |
+|----------|--------|
+| Services | ✅ CONSISTENT |
+| Fee Structure | ⚠️ MINOR_DISCREPANCY |
+| **Overall** | **NEEDS REVIEW** |
+
+## Firm Information
+- Name: Example Investment Advisors
+- CRD: 119290
+- SEC: 801-12345
+- AUM: $500M
+- Brochure Date: 2024-03-15
+
+## Services Comparison
+**Matching Services:**
+- Portfolio Management (Individuals)
+- Financial Planning
+- Pension Consulting
+
+**Discrepancies:**
+- Part 1 reports "Selection of other advisers" but Part 2 does not describe this service ⚠️
+
+## Fee Structure Comparison
+**Matching Fee Types:**
+- Asset-based (percentage of AUM)
+- Hourly fees
+
+**Discrepancies:**
+- Part 2 mentions "Performance-based fees" but Part 1 does not report this ❌
+
+**Recommendation:** Review and update Form ADV Part 1 Item 5E to include performance-based fees if offered.
+```
+
+---
+
+## Building a Board Step-by-Step
+
+### **1. Design Phase**
+
+**Ask yourself:**
+- What is the goal? (Output)
+- What data do I need? (Input Schema)
+- What are the sequential phases? (Swimlanes)
+- What are the independent work units? (Tasks)
+
+**For Form ADV Auditor:**
+- Goal: Compliance report
+- Input: CRD number
+- Phases: Fetch → Extract → Compare → Report
+- Tasks: API calls, text extraction, LLM analysis
+
+---
+
+### **2. Create Board (Draft)**
+
+```bash
+POST /api/kanban/boards
+{
+  "name": "Form ADV Auditor",
+  "input_schema": {
+    "type": "object",
+    "required": ["crd_number"],
+    "properties": {
+      "crd_number": {
+        "type": "string",
+        "displayName": "CRD Number"
+      }
+    }
+  },
+  "instructions": "You are a compliance analyst...",
+  "default_model": "claude-sonnet"
+}
+```
+
+Returns `board_id`
+
+---
+
+### **3. Create Swimlanes**
+
+```bash
+POST /api/kanban/boards/{board_id}/swimlanes
+{
+  "name": "Data Retrieval",
+  "instructions": "Fetch Form ADV data from SEC",
+  "position": 0,
+  "exit_criteria": {
+    "type": "all_tasks_success"
+  }
+}
+```
+
+Repeat for each swimlane (5 total).
+
+---
+
+### **4. Create Tasks**
+
+```bash
+POST /api/kanban/swimlanes/{swimlane_id}/tasks
+{
+  "name": "Fetch ADV Part 1",
+  "task_type": "tool_call",
+  "instructions": "Fetch regulatory data",
+  "tool_config": {
+    "tool_name": "fetch_adv_part1"
+  },
+  "input_mapping": {
+    "crd_number": "$.run_input.crd_number"
+  },
+  "output_mapping": {
+    "data": "$.state.adv1_data",
+    "success": "$.state.adv1_success"
+  }
+}
+```
+
+Repeat for each task (11 total).
+
+---
+
+### **5. Add Dependencies**
+
+```bash
+POST /api/kanban/tasks/{task_id}/dependencies
+{
+  "target_task_id": "{prerequisite_task_id}"
+}
+```
+
+For Form ADV Auditor, most tasks within swimlanes are **independent** (no dependencies).
+
+---
+
+### **6. Validate & Publish**
+
+```bash
+# Validate first
+POST /api/kanban/boards/{board_id}/validate
+
+# If valid, publish
+POST /api/kanban/boards/{board_id}/publish
+```
+
+Board status changes: `draft` → `published`
+
+---
+
+### **7. Run the Board**
+
+```bash
+POST /api/kanban/boards/{board_id}/run
+{
+  "run_input": {
+    "crd_number": "119290"
+  }
+}
+```
+
+Returns `run_id`.
+
+---
+
+### **8. Monitor Execution**
+
+```bash
+# Get status
+GET /api/kanban/runs/{run_id}/status
+
+# Get full results
+GET /api/kanban/runs/{run_id}
+```
+
+---
+
+## Summary: Data Flow Diagram
+
+```
+USER INPUT
+  ↓
+run_input: { crd_number: "119290" }
+  ↓
+┌─────────────────────────────────────┐
+│ SWIMLANE 1: Data Retrieval         │
+│ ┌─────────────┐  ┌─────────────┐  │
+│ │ Fetch ADV 1 │  │ Fetch ADV 2 │  │ (parallel)
+│ └──────┬──────┘  └──────┬──────┘  │
+│        ↓                 ↓          │
+│   state.adv1_data   state.brochure_text
+└─────────────────────────────────────┘
+  ↓
+┌─────────────────────────────────────┐
+│ SWIMLANE 2: Extract Sections       │
+│ ┌──────┐ ┌──────┐ ┌──────┐        │
+│ │Item 4│ │Item 5│ │Item 7│        │ (parallel)
+│ └──┬───┘ └──┬───┘ └──┬───┘        │
+│    ↓        ↓        ↓             │
+│  item4   item5   item7             │
+└─────────────────────────────────────┘
+  ↓
+┌─────────────────────────────────────┐
+│ SWIMLANE 3: Extract Data (LLM)     │
+│ ┌────────┐ ┌────────┐ ┌────────┐  │
+│ │Part 1  │ │Part 2  │ │Part 2  │  │ (parallel)
+│ │Extract │ │Services│ │Fees    │  │
+│ └───┬────┘ └───┬────┘ └───┬────┘  │
+│     ↓          ↓          ↓        │
+│  part1_    part2_    part2_        │
+│  extracted services  fees          │
+└─────────────────────────────────────┘
+  ↓
+┌─────────────────────────────────────┐
+│ SWIMLANE 4: Compare (LLM)          │
+│ ┌────────────┐  ┌────────────┐    │
+│ │ Compare    │  │ Compare    │    │ (parallel)
+│ │ Services   │  │ Fees       │    │
+│ └─────┬──────┘  └─────┬──────┘    │
+│       ↓                ↓            │
+│  services_      fees_              │
+│  comparison     comparison         │
+└─────────────────────────────────────┘
+  ↓
+┌─────────────────────────────────────┐
+│ SWIMLANE 5: Report (LLM)           │
+│ ┌─────────────────┐                │
+│ │ Generate Report │                │
+│ └────────┬────────┘                │
+│          ↓                          │
+│   state.final_report               │
+│   (Markdown string)                │
+└─────────────────────────────────────┘
+  ↓
+RUN OUTPUT
+  ↓
+User sees final markdown report
+```
+
+---
+
+## Key Concepts Summary
+
+### **Board = Workflow Template**
+- Defines structure, not execution
+- Can be run multiple times with different inputs
+
+### **Swimlanes = Sequential Phases**
+- Execute one after another
+- Exit criteria determines when to proceed
+
+### **Tasks = Work Units**
+- Can be independent (parallel) or dependent (sequential)
+- Types: llm_call, tool_call, human_review, conditional
+
+### **Dependencies = Execution Order**
+- No dependencies → runs immediately
+- Has dependencies → waits for prerequisites
+
+### **JSONPath = Data Routing**
+- `$.run_input.*` - User input
+- `$.state.*` - Shared state
+- `$.task_outputs.{uuid}.*` - Task results
+- `$.files.*` - Uploaded files
+
+### **Input/Output Mapping**
+- `input_mapping`: Where to get data FROM
+- `output_mapping`: Where to save data TO
+
+### **State = Shared Memory**
+- All tasks read/write to same state object
+- Enables data flow between tasks
+
+---
+
+## Best Practices
+
+1. **Design swimlanes by phase, not by task type**
+   - ✅ "Data Retrieval" → "Data Processing" → "Report Generation"
+   - ❌ "Tool Calls" → "LLM Calls" → "Output"
+
+2. **Maximize parallelization**
+   - Only add dependencies when truly needed
+   - Independent tasks run faster in parallel
+
+3. **Use clear, descriptive names**
+   - Task names should describe what they DO, not how
+   - ✅ "Extract Invoice Data"
+   - ❌ "Task 1"
+
+4. **Validate with output schemas**
+   - Forces LLMs to return structured data
+   - Prevents downstream errors
+
+5. **Store intermediate results in state**
+   - Enables debugging
+   - Allows tasks to build on each other
+
+6. **Test with test data sets**
+   - Create reusable test inputs
+   - Fast iteration during development
+
+---
+
+This guide provides everything needed to understand and build Kanban boards in the system!

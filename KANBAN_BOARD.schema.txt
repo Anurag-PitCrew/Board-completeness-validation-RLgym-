@@ -1,0 +1,273 @@
+Kanban Board JSON Structure
+Based on the codebase analysis, here's a detailed breakdown of the Kanban board system and its JSON structures:
+
+1. Kanban Board - Complete Structure
+A Kanban board is composed of hierarchical elements: Board → Swimlanes → Tasks → Dependencies
+
+Full Board JSON Structure
+
+{
+  "id": "uuid-string",
+  "user_id": 123,
+  "name": "Board Name",
+  "description": "Board description",
+  "instructions": "Global instructions for the entire board workflow",
+  
+  // Schema definitions
+  "input_schema": {
+    "type": "object",
+    "required": ["field1", "field2"],
+    "properties": {
+      "field1": {
+        "type": "string",
+        "format": "file",
+        "description": "Input field description",
+        "displayName": "Display Name"
+      }
+    }
+  },
+  "output_schema": { /* Output structure definition */ },
+  "state_schema": { /* Internal state structure */ },
+  
+  // Configuration
+  "default_model": "claude-sonnet",
+  "status": "draft" | "published" | "archived",
+  "version": 1,
+  
+  // Template metadata
+  "is_template": false,
+  "cloned_from_id": "uuid-of-template",
+  "reference_id": "human-readable-id",
+  "template_version": "1.0",
+  "is_user_modified": false,
+  
+  // Timestamps
+  "created_at": "2026-03-02T10:00:00Z",
+  "updated_at": "2026-03-02T10:00:00Z",
+  
+  // Swimlanes contain tasks
+  "swimlanes": [/* See swimlane structure below */]
+}
+2. Swimlane Structure
+Swimlanes represent sequential phases in the workflow. Tasks within a swimlane can run in parallel based on dependencies.
+
+
+{
+  "id": "swimlane-uuid",
+  "board_id": "board-uuid",
+  "name": "Swimlane Name",
+  "instructions": "Phase-specific instructions",
+  "position": 0,
+  
+  // Exit criteria - determines when to move to next swimlane
+  "exit_criteria": {
+    "type": "all_tasks_success",  // Options: all_tasks_success, any_task_success, human_approval, condition
+    "expression": null,            // For 'condition' type: "$.tasks.validate.output.score > 0.8"
+    "on_failure": "stop"           // What to do if criteria not met
+  },
+  
+  "created_at": "2026-03-02T10:00:00Z",
+  
+  // Tasks within this swimlane
+  "tasks": [/* See task structure below */]
+}
+3. Independent Task Structure
+Tasks are the individual work units in the workflow. They can be independent or have dependencies on other tasks.
+
+Task Types:
+llm_call - LLM inference with instructions
+tool_call - Execute external tools (read_pdf, read_excel, etc.)
+human_review - Pause for human input
+conditional - Routing/branching logic
+Complete Task JSON:
+
+{
+  "id": "task-uuid",
+  "swimlane_id": "swimlane-uuid",
+  "name": "Task Name",
+  "instructions": "Detailed task instructions/prompt",
+  "task_type": "llm_call",  // or "tool_call", "human_review", "conditional"
+  "position": 0,
+  
+  // Input/Output mapping (JSONPath expressions)
+  "input_mapping": {
+    "field_name": "$.run_input.source_field",
+    "another_field": "$.state.intermediate_data",
+    "from_previous_task": "$.task_outputs.previous-task-uuid.result"
+  },
+  
+  "output_mapping": {
+    "result_field": "$.state.target_field",
+    "extracted_data": "$.state.extracted_data"
+  },
+  
+  // Output validation schema
+  "output_schema": {
+    "type": "object",
+    "required": ["client_id", "client_name"],
+    "properties": {
+      "client_id": { "type": "string" },
+      "client_name": { "type": "string" },
+      "amount": { "type": "number" }
+    }
+  },
+  
+  // For tool_call tasks
+  "tool_config": {
+    "tool_name": "read_pdf",
+    "params": {
+      "option1": "value1"
+    }
+  },
+  
+  "model_override": null,  // Override default model for this task
+  "created_at": "2026-03-02T10:00:00Z",
+  
+  // Task dependencies (this task depends on these tasks completing first)
+  "dependencies": [
+    {
+      "id": "dependency-uuid",
+      "source_task_id": "prerequisite-task-uuid",
+      "target_task_id": "this-task-uuid",
+      "created_at": "2026-03-02T10:00:00Z"
+    }
+  ]
+}
+4. Task Working Flow & Execution
+How Tasks Execute:
+Dependency Resolution: Tasks with no dependencies run first (in parallel)
+Input Mapping: Data is pulled from various sources using JSONPath
+Execution:
+llm_call: Sends instructions + inputs to LLM
+tool_call: Executes the specified tool with parameters
+human_review: Pauses and waits for human input
+Output Mapping: Results are saved to state using JSONPath
+Next Tasks: Dependent tasks can now access this task's output
+JSONPath Reference Locations:
+Path Pattern	Description
+$.run_input.*	Initial input provided when board run starts
+$.files.*	Uploaded files from input
+$.state.*	Shared state across all tasks
+$.task_outputs.{task_uuid}.*	Output from a specific task
+Example Task Flow:
+
+Task A (no dependencies) → Reads PDF
+    ↓ (output: $.state.pdf_content)
+Task B (depends on A) → Extracts data from PDF content
+    ↓ (output: $.state.extracted_data)
+Task C (depends on B) → Validates extracted data
+5. Board Run & Task Execution Records
+BoardRun Structure:
+
+{
+  "id": "run-uuid",
+  "board_id": "board-uuid",
+  "board_version": 1,
+  "user_id": 123,
+  "status": "pending" | "running" | "paused" | "completed" | "failed" | "cancelled",
+  
+  "run_input": {
+    "invoice_pdf": "path/to/file.pdf",
+    "custom_field": "value"
+  },
+  
+  "run_output": {
+    "final_result": "data"
+  },
+  
+  "error_message": null,
+  "started_at": "2026-03-02T10:00:00Z",
+  "completed_at": "2026-03-02T10:05:00Z",
+  "created_at": "2026-03-02T10:00:00Z",
+  
+  // Snapshot of board configuration at time of run
+  "board_snapshot": { /* Full board JSON */ },
+  
+  // Individual task execution records
+  "task_executions": [/* See task execution below */]
+}
+TaskExecution Structure:
+
+{
+  "id": "execution-uuid",
+  "run_id": "run-uuid",
+  "task_id": "task-uuid",
+  "task_name": "Task Name",
+  "status": "pending" | "running" | "completed" | "failed" | "skipped",
+  
+  "input_data": {
+    "field1": "value1"
+  },
+  
+  "output_data": {
+    "result": "extracted data"
+  },
+  
+  "error_message": null,
+  "tokens_used": 1500,
+  "started_at": "2026-03-02T10:00:00Z",
+  "completed_at": "2026-03-02T10:00:30Z"
+}
+6. Real Example - Invoice Processing
+Here's a real example from the codebase showing how independent tasks work together:
+
+
+{
+  "board": {
+    "name": "Fee Schedule Reviewer",
+    "instructions": "Verify client invoices against billing data",
+    "input_schema": {
+      "required": ["invoice_pdf", "client_data_excel", "adv_policy_pdf"]
+    }
+  },
+  "swimlanes": [
+    {
+      "name": "Invoice Extraction",
+      "position": 1,
+      "tasks": [
+        {
+          "name": "Read Invoice PDF",
+          "task_type": "tool_call",
+          "position": 1,
+          "tool_config": {
+            "tool_name": "read_pdf"
+          },
+          "input_mapping": {
+            "path": "$.files.invoice_pdf"
+          },
+          "output_mapping": {
+            "content": "$.state.invoice_content"
+          },
+          "dependencies": []  // ← INDEPENDENT - runs immediately
+        },
+        {
+          "name": "Extract Invoice Data",
+          "task_type": "llm_call",
+          "position": 2,
+          "instructions": "Extract client_id, amounts, dates from invoice",
+          "input_mapping": {
+            "invoice_content": "$.state.invoice_content"  // ← Uses output from previous task
+          },
+          "output_mapping": {
+            "parsed": "$.state.extracted_invoice"
+          },
+          "dependencies": [
+            {
+              "target_task_index": 0  // ← DEPENDS on "Read Invoice PDF"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+Key Concepts Summary:
+Hierarchical Structure: Board → Swimlanes → Tasks → Dependencies
+Sequential Swimlanes: Swimlanes run one after another
+Parallel Tasks: Tasks within a swimlane run in parallel (based on dependencies)
+Independent Tasks: Tasks with no dependencies execute immediately
+Data Flow: Uses JSONPath to route data between tasks
+State Management: Shared state across all tasks via $.state.*
+Task Types: llm_call, tool_call, human_review, conditional
+Execution Tracking: Full audit trail of every task execution
+This structure enables building complex agentic workflows where LLMs and tools work together to process documents, extract data, validate compliance, and produce reports!

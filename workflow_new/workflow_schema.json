@@ -1,0 +1,48 @@
+{
+  "board": {
+    "name": "Fee Schedule Reviewer",
+    "instructions": "Verify client invoices against billing data"
+  },
+  "swimlanes": [
+    {
+      "name": "Invoice Extraction",
+      "position": 1,
+      "tasks": [
+        {
+          "id": "task_1",
+          "name": "Read Invoice PDF",
+          "task_type": "tool_call",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "task_2",
+          "name": "Extract Invoice Data",
+          "task_type": "llm_call",
+          "status": "pending",
+          "dependencies": ["task_1"]
+        },
+        {
+          "id": "task_3",
+          "name": "Validate Data",
+          "task_type": "llm_call",
+          "status": "pending",
+          "dependencies": ["task_2"]
+        }
+      ]
+    },
+    {
+      "name": "Human Review",
+      "position": 2,
+      "tasks": [
+        {
+          "id": "task_4",
+          "name": "Final Approval",
+          "task_type": "human_review",
+          "status": "pending",
+          "dependencies": ["task_3"]
+        }
+      ]
+    }
+  ]
+}
